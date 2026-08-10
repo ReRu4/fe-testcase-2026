@@ -1,0 +1,215 @@
+/* ============================================================
+   cms-theme.css — глобальная тема zero-code конструктора.
+   Это НЕ часть вашего виджета. Файл менять нельзя.
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  /* Да, у конструктора именно так. Исторически. */
+  box-sizing: content-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #eef1f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1d2433;
+}
+
+/* Конструктор «адаптивит» всю медиа внутри блоков. */
+img,
+canvas,
+svg,
+video {
+  max-width: 100%;
+}
+
+/* Служебные классы конструктора */
+.cms-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: #10151f;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  z-index: 9999;
+  font-size: 14px;
+}
+
+.cms-header__brand {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cms-header__spacer {
+  flex: 1;
+}
+
+.cms-body {
+  display: flex;
+  padding-top: 52px;
+  min-height: calc(100vh - 52px);
+}
+
+.cms-sidebar {
+  width: 260px;
+  flex: 0 0 260px;
+  background: #fff;
+  border-right: 1px solid #dde3ec;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  transition: width 220ms ease, flex-basis 220ms ease, padding 220ms ease;
+  overflow: hidden;
+}
+
+.cms-body--collapsed .cms-sidebar {
+  width: 0;
+  flex-basis: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.cms-viewport {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+  overflow-x: hidden;
+}
+
+/* Полотно конструктора. Именно на нём живёт масштаб. */
+#cms-canvas {
+  background: #fff;
+  border: 1px solid #dde3ec;
+  border-radius: 8px;
+  padding: 24px;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.cms-block {
+  border: 1px dashed #c6d0de;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.cms-block__title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c8798;
+  margin-bottom: 8px;
+}
+
+.cms-widget-slot {
+  min-height: 420px;
+  background: repeating-linear-gradient(
+    45deg,
+    #f7f9fc,
+    #f7f9fc 12px,
+    #f1f4f9 12px,
+    #f1f4f9 24px
+  );
+  border-radius: 4px;
+}
+
+.cms-text-block {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #4b5568;
+}
+
+/* Панель диагностики */
+.cms-diag {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 300px;
+  background: #10151f;
+  color: #d6e0f0;
+  border-radius: 8px;
+  padding: 12px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  z-index: 100000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.cms-diag h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8fa3c0;
+}
+
+.cms-diag__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cms-diag__row b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.cms-diag__bad b {
+  color: #ff8080;
+}
+
+.cms-diag__good b {
+  color: #7ee2a8;
+}
+
+.cms-diag__log {
+  margin-top: 8px;
+  max-height: 108px;
+  overflow: auto;
+  border-top: 1px solid #2a3244;
+  padding-top: 6px;
+  color: #93a2ba;
+}
+
+.cms-btn {
+  background: #273044;
+  color: #dfe7f5;
+  border: 1px solid #3b465e;
+  border-radius: 5px;
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cms-btn:hover {
+  background: #333e56;
+}
+
+.cms-btn--on {
+  background: #2f6d4f;
+  border-color: #3d8a64;
+  color: #fff;
+}
+
+.cms-compat-badge {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #b3401f;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font: 600 13px/1.4 -apple-system, sans-serif;
+  z-index: 100001;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
