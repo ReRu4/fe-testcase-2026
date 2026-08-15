@@ -1,3 +1,4 @@
+import { DEFAULT_API_BASE_URL } from '../config';
 import type { Coordinates, Poi, Rarity } from '../types';
 
 export const BASE_POINTS: Readonly<Record<Rarity, number>> = {
@@ -45,6 +46,22 @@ function safeHttpUrl(value: unknown): string | undefined {
   }
 }
 
+function resolveApiUrl(apiBaseUrl: string): URL {
+  return new URL(apiBaseUrl, DEFAULT_API_BASE_URL);
+}
+
+function getSourceKey(apiBaseUrl: string): string {
+  const url = resolveApiUrl(apiBaseUrl);
+  return `${url.origin}${url.pathname}`;
+}
+
+export class WikipediaResponseError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = 'WikipediaResponseError';
+  }
+}
+
 export function getRarity(wikiType: string | undefined, hasThumbnail: boolean): Rarity {
   if (wikiType === 'landmark' && hasThumbnail) return 'legendary';
   if (wikiType && EPIC_TYPES.has(wikiType)) return 'epic';
@@ -53,18 +70,23 @@ export function getRarity(wikiType: string | undefined, hasThumbnail: boolean): 
 }
 
 function getArticleUrl(apiBaseUrl: string, pageId: number): string {
-  try {
-    const url = new URL(apiBaseUrl);
-    url.pathname = '/';
-    url.search = `?curid=${pageId}`;
-    return url.href;
-  } catch {
-    return `https://ru.wikipedia.org/?curid=${pageId}`;
-  }
+  const url = resolveApiUrl(apiBaseUrl);
+  url.pathname = '/';
+  url.search = '';
+  url.searchParams.set('curid', String(pageId));
+  url.hash = '';
+  return url.href;
 }
 
-function parsePage(value: unknown, apiBaseUrl: string): Poi | null {
-  if (!isRecord(value) || !isFiniteNumber(value.pageid)) return null;
+function parsePage(value: unknown, apiBaseUrl: string, sourceKey: string): Poi | null {
+  if (
+    !isRecord(value) ||
+    !isFiniteNumber(value.pageid) ||
+    !Number.isInteger(value.pageid) ||
+    value.pageid <= 0
+  ) {
+    return null;
+  }
 
   const title = optionalText(value.title);
   const coordinates = Array.isArray(value.coordinates) ? value.coordinates[0] : undefined;
@@ -91,7 +113,7 @@ function parsePage(value: unknown, apiBaseUrl: string): Poi | null {
   const pageId = value.pageid;
 
   return {
-    id: String(pageId),
+    id: `${sourceKey}#${pageId}`,
     title,
     coordinates: [longitude, latitude],
     description: optionalText(value.description),
@@ -104,7 +126,17 @@ function parsePage(value: unknown, apiBaseUrl: string): Poi | null {
 }
 
 export function parseWikipediaResponse(value: unknown, apiBaseUrl: string): Poi[] {
-  if (!isRecord(value) || !isRecord(value.query)) return [];
+  if (!isRecord(value)) return [];
+
+  if ('error' in value) {
+    const error = isRecord(value.error) ? value.error : undefined;
+    const details = optionalText(error?.info) ?? optionalText(error?.code);
+    throw new WikipediaResponseError(
+      details ? `Wikipedia API: ${details}` : 'Wikipedia API вернул ошибку',
+    );
+  }
+
+  if (!isRecord(value.query)) return [];
 
   const pages = value.query.pages;
   const rawPages = Array.isArray(pages)
@@ -113,9 +145,10 @@ export function parseWikipediaResponse(value: unknown, apiBaseUrl: string): Poi[
       ? Object.values(pages)
       : [];
   const unique = new Map<string, Poi>();
+  const sourceKey = getSourceKey(apiBaseUrl);
 
   for (const rawPage of rawPages) {
-    const poi = parsePage(rawPage, apiBaseUrl);
+    const poi = parsePage(rawPage, apiBaseUrl, sourceKey);
     if (poi) unique.set(poi.id, poi);
   }
 
@@ -124,10 +157,11 @@ export function parseWikipediaResponse(value: unknown, apiBaseUrl: string): Poi[
 
 export function buildWikipediaUrl(apiBaseUrl: string, center: Coordinates): string {
   const [longitude, latitude] = center;
-  const url = new URL(apiBaseUrl, window.location.href);
-  url.search = new URLSearchParams({
+  const url = resolveApiUrl(apiBaseUrl);
+  const parameters = {
     action: 'query',
     format: 'json',
+    formatversion: '2',
     origin: '*',
     generator: 'geosearch',
     ggscoord: `${latitude}|${longitude}`,
@@ -137,7 +171,11 @@ export function buildWikipediaUrl(apiBaseUrl: string, center: Coordinates): stri
     coprop: 'type|dim',
     piprop: 'thumbnail',
     pithumbsize: '160',
-  }).toString();
+  };
+
+  for (const [name, value] of Object.entries(parameters)) {
+    url.searchParams.set(name, value);
+  }
+
   return url.href;
 }
-

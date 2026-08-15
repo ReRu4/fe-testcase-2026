@@ -3,10 +3,32 @@ import { buildWikipediaUrl, parseWikipediaResponse } from './wikipedia';
 
 const CELL_SIZE_DEGREES = 0.06;
 const DEFAULT_CACHE_CAPACITY = 24;
+const DEFAULT_RETRY_COUNT = 1;
+const DEFAULT_RETRY_DELAY_MS = 300;
+const RETRYABLE_HTTP_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
 export interface PoiLoadResult {
   readonly points: readonly Poi[];
   readonly fromCache: boolean;
+}
+
+export interface PoiRepositoryOptions {
+  readonly fetcher?: typeof fetch;
+  readonly capacity?: number;
+  readonly retryCount?: number;
+  readonly retryDelayMs?: number;
+}
+
+interface InFlightRequest {
+  readonly controller: AbortController;
+  readonly promise: Promise<readonly Poi[]>;
+}
+
+class WikipediaHttpError extends Error {
+  public constructor(public readonly status: number) {
+    super(`Wikipedia API вернул HTTP ${status}`);
+    this.name = 'WikipediaHttpError';
+  }
 }
 
 function cellFor(center: Coordinates): { key: string; center: Coordinates } {
@@ -20,20 +42,73 @@ function cellFor(center: Coordinates): { key: string; center: Coordinates } {
   };
 }
 
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
+function nonNegativeInteger(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback;
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : fallback;
+}
+
+function createAbortError(): DOMException {
+  return new DOMException('Операция отменена', 'AbortError');
+}
+
+export function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error || (typeof error === 'object' && error !== null)) &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
+}
+
+function isRetryable(error: unknown): boolean {
+  return (
+    (error instanceof WikipediaHttpError && RETRYABLE_HTTP_STATUSES.has(error.status)) ||
+    error instanceof TypeError
+  );
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(createAbortError());
+
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onAbort);
+      reject(createAbortError());
+    };
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export class PoiRepository {
   private readonly cache = new Map<string, readonly Poi[]>();
-  private readonly inFlight = new Map<string, Promise<readonly Poi[]>>();
+  private readonly inFlight = new Map<string, InFlightRequest>();
+  private readonly fetcher: typeof fetch;
+  private readonly capacity: number;
+  private readonly retryCount: number;
+  private readonly retryDelayMs: number;
   private activeRequest: { key: string; controller: AbortController } | null = null;
 
   public constructor(
     private readonly apiBaseUrl: string,
-    private readonly fetcher: typeof fetch = fetch,
-    private readonly capacity = DEFAULT_CACHE_CAPACITY,
-  ) {}
+    options: PoiRepositoryOptions = {},
+  ) {
+    this.fetcher = options.fetcher ?? fetch;
+    this.capacity = positiveInteger(options.capacity, DEFAULT_CACHE_CAPACITY);
+    this.retryCount = nonNegativeInteger(options.retryCount, DEFAULT_RETRY_COUNT);
+    this.retryDelayMs = nonNegativeInteger(options.retryDelayMs, DEFAULT_RETRY_DELAY_MS);
+  }
 
   public async loadAround(center: Coordinates): Promise<PoiLoadResult> {
     const cell = cellFor(center);
@@ -41,11 +116,15 @@ export class PoiRepository {
 
     if (cached) {
       this.touch(cell.key, cached);
-      return { points: cached, fromCache: true };
+      return { points: this.getCachedPoints(), fromCache: true };
     }
 
     const running = this.inFlight.get(cell.key);
-    if (running) return { points: await running, fromCache: false };
+    if (running && !running.controller.signal.aborted) {
+      await running.promise;
+      return { points: this.getCachedPoints(), fromCache: false };
+    }
+    if (running) this.inFlight.delete(cell.key);
 
     if (this.activeRequest && this.activeRequest.key !== cell.key) {
       this.activeRequest.controller.abort();
@@ -53,16 +132,19 @@ export class PoiRepository {
 
     const controller = new AbortController();
     this.activeRequest = { key: cell.key, controller };
-    const request = this.fetchCell(cell.center, controller.signal);
-    this.inFlight.set(cell.key, request);
-
-    try {
-      const points = await request;
+    const request = this.fetchCell(cell.center, controller.signal).then((points) => {
+      if (controller.signal.aborted) throw createAbortError();
       this.touch(cell.key, points);
       this.prune();
-      return { points, fromCache: false };
+      return points;
+    });
+    this.inFlight.set(cell.key, { controller, promise: request });
+
+    try {
+      await request;
+      return { points: this.getCachedPoints(), fromCache: false };
     } finally {
-      this.inFlight.delete(cell.key);
+      if (this.inFlight.get(cell.key)?.promise === request) this.inFlight.delete(cell.key);
       if (this.activeRequest?.controller === controller) this.activeRequest = null;
     }
   }
@@ -81,21 +163,31 @@ export class PoiRepository {
   }
 
   private async fetchCell(center: Coordinates, signal: AbortSignal): Promise<readonly Poi[]> {
-    try {
-      const response = await this.fetcher(buildWikipediaUrl(this.apiBaseUrl, center), {
-        signal,
-        headers: { Accept: 'application/json' },
-      });
+    let attempt = 0;
 
-      if (!response.ok) {
-        throw new Error(`Wikipedia API вернул HTTP ${response.status}`);
+    while (true) {
+      if (signal.aborted) throw createAbortError();
+
+      try {
+        const response = await this.fetcher(buildWikipediaUrl(this.apiBaseUrl, center), {
+          signal,
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) throw new WikipediaHttpError(response.status);
+
+        const payload: unknown = await response.json();
+        if (signal.aborted) throw createAbortError();
+        return parseWikipediaResponse(payload, this.apiBaseUrl);
+      } catch (error) {
+        if (isAbortError(error) || signal.aborted) throw createAbortError();
+        if (!isRetryable(error) || attempt >= this.retryCount) {
+          throw error instanceof Error ? error : new Error('Не удалось загрузить точки');
+        }
+
+        attempt += 1;
+        await waitForRetry(this.retryDelayMs, signal);
       }
-
-      const payload: unknown = await response.json();
-      return parseWikipediaResponse(payload, this.apiBaseUrl);
-    } catch (error) {
-      if (isAbortError(error)) throw error;
-      throw error instanceof Error ? error : new Error('Не удалось загрузить точки');
     }
   }
 
@@ -112,4 +204,3 @@ export class PoiRepository {
     }
   }
 }
-
