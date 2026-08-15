@@ -58,6 +58,7 @@ describe('PoiRepository', () => {
     expect(cached.fromCache).toBe(true);
     expect(cached.points).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.contexts[0]).toBeUndefined();
   });
 
   it('накапливает точки соседних ячеек и дедуплицирует их по ID', async () => {

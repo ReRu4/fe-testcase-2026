@@ -104,7 +104,7 @@ export class PoiRepository {
     private readonly apiBaseUrl: string,
     options: PoiRepositoryOptions = {},
   ) {
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? fetch.bind(globalThis);
     this.capacity = positiveInteger(options.capacity, DEFAULT_CACHE_CAPACITY);
     this.retryCount = nonNegativeInteger(options.retryCount, DEFAULT_RETRY_COUNT);
     this.retryDelayMs = nonNegativeInteger(options.retryDelayMs, DEFAULT_RETRY_DELAY_MS);
@@ -169,7 +169,8 @@ export class PoiRepository {
       if (signal.aborted) throw createAbortError();
 
       try {
-        const response = await this.fetcher(buildWikipediaUrl(this.apiBaseUrl, center), {
+        const fetcher = this.fetcher;
+        const response = await fetcher(buildWikipediaUrl(this.apiBaseUrl, center), {
           signal,
           headers: { Accept: 'application/json' },
         });
