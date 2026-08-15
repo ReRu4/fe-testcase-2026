@@ -73,6 +73,8 @@ function createHarness(loadAround: ReturnType<typeof vi.fn>) {
     onLoaded: vi.fn(),
     onError: vi.fn(),
     onPoiSelect: vi.fn(),
+    collectRadiusMeters: 50,
+    onPlayerPosition: vi.fn(() => new Set<string>()),
   };
 
   return { map, repository, layer, scheduled, dependencies, options };
@@ -101,7 +103,10 @@ describe('MapDataController', () => {
     await flushPromises();
 
     expect(loadAround).toHaveBeenCalledWith([37.62, 55.75]);
-    expect(harness.layer.setPoints).toHaveBeenLastCalledWith([firstPoint]);
+    expect(harness.layer.setPoints).toHaveBeenLastCalledWith(
+      [firstPoint],
+      expect.objectContaining({ player: [37.62, 55.75], collectRadiusMeters: 50 }),
+    );
 
     harness.map.center = { lng: 38, lat: 56 };
     harness.map.emit('moveend');
@@ -155,7 +160,7 @@ describe('MapDataController', () => {
     [...harness.scheduled.values()].at(-1)?.();
     await flushPromises();
 
-    expect(harness.layer.setPoints).toHaveBeenCalledTimes(1);
+    expect(harness.layer.setPoints.mock.calls.at(-1)?.[0]).toEqual([firstPoint]);
     expect(harness.options.onStatus).toHaveBeenLastCalledWith({
       type: 'error',
       count: 1,

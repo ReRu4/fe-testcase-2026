@@ -34,6 +34,31 @@ export const WIDGET_STYLES = `${mapLibreStyles}
     height: 100%;
   }
 
+  [data-pokemap-player] {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    display: grid;
+    width: 34px;
+    height: 34px;
+    transform: translate(-50%, -50%);
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 10px rgb(15 23 42 / 45%);
+    background: rgb(37 99 235 / 24%);
+    pointer-events: none;
+    place-items: center;
+  }
+
+  [data-pokemap-player] span {
+    width: 10px;
+    height: 10px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #dc2626;
+  }
+
   [data-pokemap-status] {
     position: absolute;
     top: 50%;
@@ -80,6 +105,58 @@ export const WIDGET_STYLES = `${mapLibreStyles}
   [data-pokemap-data-status][data-tone="zoom"] {
     border-radius: 8px;
     color: #7c4a03;
+  }
+
+  [data-pokemap-game] {
+    position: absolute;
+    top: 12px;
+    right: 56px;
+    z-index: 3;
+    display: flex;
+    min-height: 46px;
+    overflow: hidden;
+    border: 1px solid rgb(15 23 42 / 10%);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgb(15 23 42 / 14%);
+    background: rgb(255 255 255 / 94%);
+  }
+
+  [data-pokemap-game] > span {
+    display: flex;
+    min-width: 62px;
+    padding: 6px 10px;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  [data-pokemap-game] small {
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  [data-pokemap-game] strong {
+    color: #0f172a;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  [data-pokemap-game] button {
+    padding: 0 11px;
+    border: 0;
+    border-left: 1px solid rgb(15 23 42 / 10%);
+    background: #f8fafc;
+    color: #475569;
+    font: 700 11px/1 sans-serif;
+    cursor: pointer;
+  }
+
+  [data-pokemap-game] button:disabled {
+    color: #94a3b8;
+    cursor: default;
   }
 
   [data-pokemap-card] {

@@ -7,8 +7,15 @@ export interface WidgetAppProps {
 }
 
 export function WidgetApp({ config }: WidgetAppProps): ReactElement {
-  const { containerRef, status, dataStatus, selectedPoi, clearSelectedPoi } =
-    useMapLibre(config);
+  const {
+    containerRef,
+    status,
+    dataStatus,
+    selectedPoi,
+    clearSelectedPoi,
+    game,
+    resetProgress,
+  } = useMapLibre(config);
 
   const dataMessage =
     dataStatus?.type === 'zoom'
@@ -26,6 +33,9 @@ export function WidgetApp({ config }: WidgetAppProps): ReactElement {
   return (
     <section data-pokemap-app="" aria-label={`PokeMap — ${config.city.name}`}>
       <div ref={containerRef} data-pokemap-map="" />
+      <div data-pokemap-player="" aria-hidden="true">
+        <span />
+      </div>
       {status.type !== 'ready' && (
         <p data-pokemap-status="" data-tone={status.type === 'error' ? 'error' : 'loading'}>
           {status.type === 'error' ? status.message : 'Подготовка карты…'}
@@ -39,6 +49,25 @@ export function WidgetApp({ config }: WidgetAppProps): ReactElement {
         >
           {dataMessage}
         </p>
+      )}
+      {status.type === 'ready' && (
+        <section data-pokemap-game="" aria-label="Игровой прогресс">
+          <span>
+            <small>Очки</small>
+            <strong>{game.state.score}</strong>
+          </span>
+          <span>
+            <small>Комбо</small>
+            <strong>x{game.combo.toFixed(1)}</strong>
+          </span>
+          <span>
+            <small>{game.frozen ? 'Заморозка' : 'Собрано'}</small>
+            <strong>{game.frozen ? '❄' : game.state.collectedIds.size}</strong>
+          </span>
+          <button type="button" onClick={resetProgress} disabled={game.state.collectedIds.size === 0}>
+            Сбросить
+          </button>
+        </section>
       )}
       {selectedPoi && (
         <article data-pokemap-card="" aria-label={`Точка: ${selectedPoi.title}`}>

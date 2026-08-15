@@ -15,6 +15,7 @@ export type MapDataStatus =
 
 export interface MapDataController {
   clearSelection(): void;
+  setCollectedIds(collectedIds: ReadonlySet<string>): void;
   destroy(): void;
 }
 
@@ -23,6 +24,11 @@ export interface MapDataControllerOptions {
   readonly onLoaded: (result: PoiLoadResult) => void;
   readonly onError: (message: string) => void;
   readonly onPoiSelect: (poi: Poi | null) => void;
+  readonly collectRadiusMeters: number;
+  readonly onPlayerPosition: (
+    points: readonly Poi[],
+    player: Coordinates,
+  ) => ReadonlySet<string>;
 }
 
 export interface MapDataControllerDependencies {
@@ -62,13 +68,33 @@ export function createMapDataController(
   dependencies: MapDataControllerDependencies = createDependencies(map),
 ): MapDataController {
   const layer = dependencies.createLayer(map, options.onPoiSelect);
+  let currentPoints: readonly Poi[] = [];
+  let player = getCenter(map);
+  let collectedIds: ReadonlySet<string> = new Set<string>();
   let pointCount = 0;
   let requestVersion = 0;
   let debounceId: number | null = null;
   let destroyed = false;
 
+  const renderGameState = () => {
+    layer.setPoints(currentPoints, {
+      player,
+      collectRadiusMeters: options.collectRadiusMeters,
+      collectedIds,
+    });
+  };
+
+  const updatePlayer = (nextPlayer: Coordinates) => {
+    player = nextPlayer;
+    collectedIds = options.onPlayerPosition(currentPoints, player);
+    renderGameState();
+  };
+
   const loadCurrentArea = async () => {
     if (destroyed) return;
+
+    const requestCenter = getCenter(map);
+    updatePlayer(requestCenter);
 
     if (map.getZoom() < MIN_DATA_ZOOM) {
       requestVersion += 1;
@@ -81,11 +107,12 @@ export function createMapDataController(
     options.onStatus({ type: 'loading', count: pointCount });
 
     try {
-      const result = await repository.loadAround(getCenter(map));
+      const result = await repository.loadAround(requestCenter);
       if (destroyed || version !== requestVersion) return;
 
+      currentPoints = result.points;
       pointCount = result.points.length;
-      layer.setPoints(result.points);
+      updatePlayer(requestCenter);
       options.onStatus({ type: 'ready', count: pointCount, fromCache: result.fromCache });
       options.onLoaded(result);
     } catch (error) {
@@ -111,6 +138,11 @@ export function createMapDataController(
   return {
     clearSelection() {
       layer.clearSelection();
+    },
+    setCollectedIds(nextCollectedIds) {
+      if (destroyed) return;
+      collectedIds = nextCollectedIds;
+      renderGameState();
     },
     destroy() {
       if (destroyed) return;

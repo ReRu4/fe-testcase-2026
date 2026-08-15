@@ -4,19 +4,28 @@ import type {
   Map as MapLibreMap,
   MapLayerMouseEvent,
 } from 'maplibre-gl';
-import type { Poi } from '../types';
+import { distanceMeters } from '../game/game';
+import type { Coordinates, Poi } from '../types';
 
 export const POI_SOURCE_ID = 'pokemap-pois';
+export const POI_AVAILABLE_LAYER_ID = 'pokemap-poi-available';
 export const POI_LAYER_ID = 'pokemap-poi-points';
 export const POI_SELECTION_LAYER_ID = 'pokemap-poi-selection';
 
 interface PoiFeatureProperties {
   readonly poiId: string;
   readonly rarity: Poi['rarity'];
+  readonly status: 'default' | 'available' | 'collected';
+}
+
+export interface PoiRenderState {
+  readonly player: Coordinates;
+  readonly collectRadiusMeters: number;
+  readonly collectedIds: ReadonlySet<string>;
 }
 
 export interface PoiLayer {
-  setPoints(points: readonly Poi[]): void;
+  setPoints(points: readonly Poi[], renderState: PoiRenderState): void;
   clearSelection(): void;
   destroy(): void;
 }
@@ -44,7 +53,15 @@ function createScheduler(map: MapLibreMap): PoiLayerScheduler {
   };
 }
 
-function toFeatureCollection(points: readonly Poi[]) {
+function pointStatus(point: Poi, renderState: PoiRenderState | null): PoiFeatureProperties['status'] {
+  if (!renderState) return 'default';
+  if (renderState.collectedIds.has(point.id)) return 'collected';
+  return distanceMeters(renderState.player, point.coordinates) <= renderState.collectRadiusMeters
+    ? 'available'
+    : 'default';
+}
+
+function toFeatureCollection(points: readonly Poi[], renderState: PoiRenderState | null) {
   return {
     type: 'FeatureCollection',
     features: points.map((point) => ({
@@ -57,6 +74,7 @@ function toFeatureCollection(points: readonly Poi[]) {
       properties: {
         poiId: point.id,
         rarity: point.rarity,
+        status: pointStatus(point, renderState),
       } satisfies PoiFeatureProperties,
     })),
   };
@@ -68,15 +86,20 @@ const POINT_LAYER: CircleLayerSpecification = {
   source: POI_SOURCE_ID,
   paint: {
     'circle-color': [
-      'match',
-      ['get', 'rarity'],
-      'rare',
-      '#3b82f6',
-      'epic',
-      '#8b5cf6',
-      'legendary',
-      '#f59e0b',
-      '#22c55e',
+      'case',
+      ['==', ['get', 'status'], 'collected'],
+      '#94a3b8',
+      [
+        'match',
+        ['get', 'rarity'],
+        'rare',
+        '#3b82f6',
+        'epic',
+        '#8b5cf6',
+        'legendary',
+        '#f59e0b',
+        '#22c55e',
+      ],
     ],
     'circle-radius': [
       'match',
@@ -91,7 +114,22 @@ const POINT_LAYER: CircleLayerSpecification = {
     ],
     'circle-stroke-color': '#ffffff',
     'circle-stroke-width': 2,
-    'circle-opacity': 0.94,
+    'circle-opacity': ['case', ['==', ['get', 'status'], 'collected'], 0.45, 0.94],
+  },
+};
+
+const AVAILABLE_LAYER: CircleLayerSpecification = {
+  id: POI_AVAILABLE_LAYER_ID,
+  type: 'circle',
+  source: POI_SOURCE_ID,
+  filter: ['==', ['get', 'status'], 'available'],
+  paint: {
+    'circle-color': '#ffffff',
+    'circle-radius': 16,
+    'circle-blur': 0.35,
+    'circle-opacity': 0.78,
+    'circle-stroke-color': '#16a34a',
+    'circle-stroke-width': 3,
   },
 };
 
@@ -115,13 +153,15 @@ export function createPoiLayer(
 ): PoiLayer {
   map.addSource(POI_SOURCE_ID, {
     type: 'geojson',
-    data: toFeatureCollection([]),
+    data: toFeatureCollection([], null),
   });
+  map.addLayer(AVAILABLE_LAYER);
   map.addLayer(POINT_LAYER);
   map.addLayer(SELECTION_LAYER);
 
   const pointsById = new Map<string, Poi>();
   let pendingPoints: readonly Poi[] = [];
+  let pendingRenderState: PoiRenderState | null = null;
   let selectedId: string | null = null;
   let frameId: number | null = null;
   let destroyed = false;
@@ -134,7 +174,7 @@ export function createPoiLayer(
     for (const point of pendingPoints) pointsById.set(point.id, point);
 
     const source = map.getSource(POI_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(toFeatureCollection(pendingPoints));
+    source?.setData(toFeatureCollection(pendingPoints, pendingRenderState));
 
     if (selectedId && !pointsById.has(selectedId)) {
       selectedId = null;
@@ -166,9 +206,10 @@ export function createPoiLayer(
   map.on('mouseleave', POI_LAYER_ID, handleMouseLeave);
 
   return {
-    setPoints(points) {
+    setPoints(points, renderState) {
       if (destroyed) return;
       pendingPoints = points;
+      pendingRenderState = renderState;
       if (frameId === null) frameId = scheduler.request(flushPoints);
     },
     clearSelection() {
@@ -188,6 +229,7 @@ export function createPoiLayer(
       map.getCanvas().style.cursor = '';
       if (map.getLayer(POI_SELECTION_LAYER_ID)) map.removeLayer(POI_SELECTION_LAYER_ID);
       if (map.getLayer(POI_LAYER_ID)) map.removeLayer(POI_LAYER_ID);
+      if (map.getLayer(POI_AVAILABLE_LAYER_ID)) map.removeLayer(POI_AVAILABLE_LAYER_ID);
       if (map.getSource(POI_SOURCE_ID)) map.removeSource(POI_SOURCE_ID);
       pointsById.clear();
     },

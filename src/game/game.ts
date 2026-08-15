@@ -21,13 +21,17 @@ export interface CollectionResult {
   readonly combo: number;
 }
 
-export const INITIAL_GAME_STATE: GameState = {
-  score: 0,
-  collectedIds: new Set<string>(),
-  comboSteps: 0,
-  comboDeadlineAt: null,
-  frozenUntil: null,
-};
+export function createInitialGameState(): GameState {
+  return {
+    score: 0,
+    collectedIds: new Set<string>(),
+    comboSteps: 0,
+    comboDeadlineAt: null,
+    frozenUntil: null,
+  };
+}
+
+export const INITIAL_GAME_STATE: GameState = createInitialGameState();
 
 function toRadians(value: number): number {
   return (value * Math.PI) / 180;
@@ -106,4 +110,3 @@ export function collectAvailable(
 
   return { state, collections };
 }
-

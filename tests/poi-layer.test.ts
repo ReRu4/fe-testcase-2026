@@ -2,6 +2,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createPoiLayer,
+  POI_AVAILABLE_LAYER_ID,
   POI_LAYER_ID,
   POI_SELECTION_LAYER_ID,
   POI_SOURCE_ID,
@@ -75,20 +76,29 @@ describe('PoiLayer', () => {
     const layer = createPoiLayer(map as unknown as MapLibreMap, onSelect, scheduler);
     const first = point('first', 37.62);
     const second = point('second', 37.63);
+    const renderState = {
+      player: second.coordinates,
+      collectRadiusMeters: 50,
+      collectedIds: new Set([first.id]),
+    };
 
-    layer.setPoints([first]);
-    layer.setPoints([first, second]);
+    layer.setPoints([first], renderState);
+    layer.setPoints([first, second], renderState);
     expect(scheduler.request).toHaveBeenCalledTimes(1);
 
     frames.get(1)?.(0);
     const collection = map.source.setData.mock.calls[0]?.[0] as {
-      features: Array<{ geometry: unknown }>;
+      features: Array<{ geometry: unknown; properties: { status: string } }>;
     };
     expect(collection.features).toHaveLength(2);
     expect(collection.features[1]?.geometry).toEqual({
       type: 'Point',
       coordinates: [37.63, 55.75],
     });
+    expect(collection.features.map((feature) => feature.properties.status)).toEqual([
+      'collected',
+      'available',
+    ]);
 
     map.emit('mouseenter', POI_LAYER_ID);
     expect(map.canvas.style.cursor).toBe('pointer');
@@ -116,7 +126,11 @@ describe('PoiLayer', () => {
     };
     const layer = createPoiLayer(map as unknown as MapLibreMap, vi.fn(), scheduler);
 
-    layer.setPoints([point('first', 37.62)]);
+    layer.setPoints([point('first', 37.62)], {
+      player: [37.62, 55.75],
+      collectRadiusMeters: 50,
+      collectedIds: new Set(),
+    });
     layer.destroy();
     layer.destroy();
 
@@ -125,6 +139,7 @@ describe('PoiLayer', () => {
     expect(map.removeLayer.mock.calls.map(([id]) => id)).toEqual([
       POI_SELECTION_LAYER_ID,
       POI_LAYER_ID,
+      POI_AVAILABLE_LAYER_ID,
     ]);
     expect(map.removeSource).toHaveBeenCalledWith(POI_SOURCE_ID);
   });
