@@ -1,7 +1,11 @@
 import { act } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PokeMapHandle } from '../src/types';
 import { createWidgetRuntime, type WidgetRuntime } from '../src/widget-runtime';
+
+vi.mock('../src/map/map-adapter', () => ({
+  createMapAdapter: () => ({ destroy: vi.fn() }),
+}));
 
 const runtimes: WidgetRuntime[] = [];
 

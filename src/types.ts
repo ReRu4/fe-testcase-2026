@@ -30,7 +30,11 @@ export interface PokeMapConfig {
 export type PokeMapEvent =
   | { readonly type: 'ready'; readonly city: CityConfig }
   | { readonly type: 'data-loaded'; readonly count: number; readonly fromCache: boolean }
-  | { readonly type: 'data-error'; readonly message: string }
+  | {
+      readonly type: 'error';
+      readonly source: 'map' | 'data' | 'geolocation' | 'storage';
+      readonly message: string;
+    }
   | {
       readonly type: 'poi-collected';
       readonly poi: Poi;
@@ -57,4 +61,3 @@ declare global {
     PokeMapWidget: PokeMapApi;
   }
 }
-
