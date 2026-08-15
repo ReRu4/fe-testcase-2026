@@ -45,19 +45,32 @@ class FakeMap {
   public readonly removeSource = vi.fn();
   public readonly getCanvas = vi.fn(() => this.canvas);
   public readonly getContainer = vi.fn(() => document.createElement('div'));
+  public readonly queryRenderedFeatures = vi.fn(() => [] as Array<{ properties: unknown }>);
 
-  public on(type: string, layerId: string, listener: (event: never) => void): this {
-    this.handlers.set(`${type}:${layerId}`, listener);
+  public on(
+    type: string,
+    layerIdOrListener: string | ((event: never) => void),
+    delegatedListener?: (event: never) => void,
+  ): this {
+    const key = typeof layerIdOrListener === 'string' ? layerIdOrListener : 'map';
+    const listener =
+      typeof layerIdOrListener === 'string' ? delegatedListener : layerIdOrListener;
+    if (listener) this.handlers.set(`${type}:${key}`, listener);
     return this;
   }
 
-  public off(type: string, layerId: string): this {
-    this.handlers.delete(`${type}:${layerId}`);
+  public off(type: string, layerIdOrListener: string | ((event: never) => void)): this {
+    const key = typeof layerIdOrListener === 'string' ? layerIdOrListener : 'map';
+    this.handlers.delete(`${type}:${key}`);
     return this;
   }
 
   public emit(type: string, layerId: string, event: unknown = {}): void {
     this.handlers.get(`${type}:${layerId}`)?.(event as never);
+  }
+
+  public emitMap(type: string, event: unknown = {}): void {
+    this.handlers.get(`${type}:map`)?.(event as never);
   }
 }
 
@@ -104,9 +117,17 @@ describe('PoiLayer', () => {
 
     map.emit('mouseenter', POI_LAYER_ID);
     expect(map.canvas.style.cursor).toBe('pointer');
-    map.emit('click', POI_LAYER_ID, {
-      features: [{ properties: { poiId: 'second' } }],
-    });
+    map.queryRenderedFeatures.mockReturnValueOnce([
+      { properties: { poiId: 'second' } },
+    ]);
+    map.emitMap('click', { point: { x: 120, y: 80 } });
+    expect(map.queryRenderedFeatures).toHaveBeenCalledWith(
+      [
+        [112, 72],
+        [128, 88],
+      ],
+      { layers: [POI_LAYER_ID] },
+    );
     expect(onSelect).toHaveBeenLastCalledWith(second);
     expect(map.setFilter).toHaveBeenLastCalledWith(POI_SELECTION_LAYER_ID, [
       '==',
@@ -152,5 +173,37 @@ describe('PoiLayer', () => {
       POI_HEATMAP_LAYER_ID,
     ]);
     expect(map.removeSource).toHaveBeenCalledWith(POI_SOURCE_ID);
+  });
+
+  it('готовит 20 000 объектов одним обновлением source', () => {
+    const map = new FakeMap();
+    let flush: FrameRequestCallback | undefined;
+    const scheduler: PoiLayerScheduler = {
+      request: vi.fn((callback) => {
+        flush = callback;
+        return 1;
+      }),
+      cancel: vi.fn(),
+    };
+    const layer = createPoiLayer(map as unknown as MapLibreMap, vi.fn(), scheduler);
+    const points = Array.from({ length: 20_000 }, (_, index) =>
+      point(`load-${index}`, 37.5 + (index % 500) / 10_000),
+    );
+
+    layer.setPoints(points, {
+      player: [37.62, 55.75],
+      collectRadiusMeters: 50,
+      collectedIds: new Set(),
+    });
+    const startedAt = performance.now();
+    flush?.(startedAt);
+    const preparationTime = performance.now() - startedAt;
+
+    const collection = map.source.setData.mock.calls[0]?.[0] as {
+      features: unknown[];
+    };
+    expect(collection.features).toHaveLength(20_000);
+    expect(map.source.setData).toHaveBeenCalledTimes(1);
+    expect(preparationTime).toBeLessThan(1_000);
   });
 });

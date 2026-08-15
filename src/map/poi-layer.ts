@@ -3,7 +3,7 @@ import type {
   GeoJSONSource,
   HeatmapLayerSpecification,
   Map as MapLibreMap,
-  MapLayerMouseEvent,
+  MapMouseEvent,
 } from 'maplibre-gl';
 import { distanceMeters } from '../game/game';
 import type { Coordinates, Poi } from '../types';
@@ -13,6 +13,8 @@ export const POI_HEATMAP_LAYER_ID = 'pokemap-poi-heatmap';
 export const POI_AVAILABLE_LAYER_ID = 'pokemap-poi-available';
 export const POI_LAYER_ID = 'pokemap-poi-points';
 export const POI_SELECTION_LAYER_ID = 'pokemap-poi-selection';
+
+const POI_HIT_TOLERANCE_PX = 8;
 
 interface PoiFeatureProperties {
   readonly poiId: string;
@@ -225,8 +227,16 @@ export function createPoiLayer(
     }
   };
 
-  const handleClick = (event: MapLayerMouseEvent) => {
-    const poiId = event.features?.[0]?.properties.poiId;
+  const handleClick = (event: MapMouseEvent) => {
+    const { x, y } = event.point;
+    const features = map.queryRenderedFeatures(
+      [
+        [x - POI_HIT_TOLERANCE_PX, y - POI_HIT_TOLERANCE_PX],
+        [x + POI_HIT_TOLERANCE_PX, y + POI_HIT_TOLERANCE_PX],
+      ],
+      { layers: [POI_LAYER_ID] },
+    );
+    const poiId = features[0]?.properties.poiId;
     if (typeof poiId !== 'string') return;
 
     const point = pointsById.get(poiId);
@@ -243,7 +253,7 @@ export function createPoiLayer(
     map.getCanvas().style.cursor = '';
   };
 
-  map.on('click', POI_LAYER_ID, handleClick);
+  map.on('click', handleClick);
   map.on('mouseenter', POI_LAYER_ID, handleMouseEnter);
   map.on('mouseleave', POI_LAYER_ID, handleMouseLeave);
 
@@ -269,7 +279,7 @@ export function createPoiLayer(
       destroyed = true;
       if (frameId !== null) scheduler.cancel(frameId);
       frameId = null;
-      map.off('click', POI_LAYER_ID, handleClick);
+      map.off('click', handleClick);
       map.off('mouseenter', POI_LAYER_ID, handleMouseEnter);
       map.off('mouseleave', POI_LAYER_ID, handleMouseLeave);
       map.getCanvas().style.cursor = '';
