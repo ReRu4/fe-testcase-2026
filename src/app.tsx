@@ -1,9 +1,14 @@
 import type { ReactElement } from 'react';
+import type { NormalizedConfig } from './config';
 
-/**
- * Минимальный React-корень. Содержимое появится на следующих этапах, когда
- * будет реализован управляемый lifecycle экземпляра виджета.
- */
-export function WidgetApp(): ReactElement {
-  return <div data-pokemap-app="" />;
+export interface WidgetAppProps {
+  readonly config: NormalizedConfig;
+}
+
+export function WidgetApp({ config }: WidgetAppProps): ReactElement {
+  return (
+    <section data-pokemap-app="" aria-label={`PokeMap — ${config.city.name}`}>
+      <p data-pokemap-status="">Подготовка карты…</p>
+    </section>
+  );
 }
