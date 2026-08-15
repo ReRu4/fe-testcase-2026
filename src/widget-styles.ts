@@ -159,6 +159,91 @@ export const WIDGET_STYLES = `${mapLibreStyles}
     cursor: default;
   }
 
+  [data-pokemap-controls] {
+    position: absolute;
+    top: 56px;
+    left: 12px;
+    z-index: 3;
+    display: flex;
+    max-width: calc(100% - 24px);
+    padding: 5px;
+    gap: 5px;
+    border: 1px solid rgb(15 23 42 / 10%);
+    border-radius: 9px;
+    box-shadow: 0 4px 16px rgb(15 23 42 / 14%);
+    background: rgb(255 255 255 / 94%);
+  }
+
+  [data-pokemap-controls] label {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  [data-pokemap-controls] label > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
+  [data-pokemap-controls] select,
+  [data-pokemap-controls] button {
+    min-height: 30px;
+    border: 0;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #334155;
+    font: 700 11px/1 sans-serif;
+  }
+
+  [data-pokemap-controls] select {
+    max-width: 150px;
+    padding: 0 28px 0 9px;
+    cursor: pointer;
+  }
+
+  [data-pokemap-controls] button {
+    padding: 0 10px;
+    cursor: pointer;
+  }
+
+  [data-pokemap-controls] button[aria-pressed="true"] {
+    background: #7c3aed;
+    color: #ffffff;
+  }
+
+  [data-pokemap-controls] button:disabled {
+    color: #94a3b8;
+    cursor: wait;
+  }
+
+  [data-pokemap-controls] select:focus-visible,
+  [data-pokemap-controls] button:focus-visible,
+  [data-pokemap-game] button:focus-visible {
+    outline: 3px solid rgb(37 99 235 / 40%);
+    outline-offset: 1px;
+  }
+
+  [data-pokemap-notice] {
+    position: absolute;
+    top: 104px;
+    left: 12px;
+    z-index: 3;
+    max-width: min(320px, calc(100% - 24px));
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 7px;
+    box-shadow: 0 4px 16px rgb(15 23 42 / 14%);
+    background: rgb(254 242 242 / 96%);
+    color: #991b1b;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
   [data-pokemap-card] {
     position: absolute;
     right: 12px;
@@ -198,6 +283,31 @@ export const WIDGET_STYLES = `${mapLibreStyles}
   [data-pokemap-card-content] strong {
     color: #111827;
     white-space: nowrap;
+  }
+
+  [data-pokemap-card-content] small {
+    width: fit-content;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  [data-pokemap-card-content] small[data-rarity="rare"] {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+
+  [data-pokemap-card-content] small[data-rarity="epic"] {
+    background: #ede9fe;
+    color: #6d28d9;
+  }
+
+  [data-pokemap-card-content] small[data-rarity="legendary"] {
+    background: #fef3c7;
+    color: #92400e;
   }
 
   [data-pokemap-card-content] span {

@@ -15,7 +15,9 @@ export type MapDataStatus =
 
 export interface MapDataController {
   clearSelection(): void;
+  refresh(center?: Coordinates): void;
   setCollectedIds(collectedIds: ReadonlySet<string>): void;
+  setHeatmapVisible(visible: boolean): void;
   destroy(): void;
 }
 
@@ -74,6 +76,7 @@ export function createMapDataController(
   let pointCount = 0;
   let requestVersion = 0;
   let debounceId: number | null = null;
+  let requestedCenter: Coordinates | null = null;
   let destroyed = false;
 
   const renderGameState = () => {
@@ -90,10 +93,10 @@ export function createMapDataController(
     renderGameState();
   };
 
-  const loadCurrentArea = async () => {
+  const loadCurrentArea = async (center?: Coordinates) => {
     if (destroyed) return;
 
-    const requestCenter = getCenter(map);
+    const requestCenter = center ?? getCenter(map);
     updatePlayer(requestCenter);
 
     if (map.getZoom() < MIN_DATA_ZOOM) {
@@ -124,13 +127,17 @@ export function createMapDataController(
     }
   };
 
-  const handleMoveEnd = () => {
+  const scheduleLoad = (center?: Coordinates) => {
+    if (center) requestedCenter = center;
     if (debounceId !== null) dependencies.cancel(debounceId);
     debounceId = dependencies.schedule(() => {
       debounceId = null;
-      void loadCurrentArea();
+      const nextCenter = requestedCenter;
+      requestedCenter = null;
+      void loadCurrentArea(nextCenter ?? undefined);
     }, DATA_DEBOUNCE_MS);
   };
+  const handleMoveEnd = () => scheduleLoad();
 
   map.on('moveend', handleMoveEnd);
   void loadCurrentArea();
@@ -139,10 +146,24 @@ export function createMapDataController(
     clearSelection() {
       layer.clearSelection();
     },
+    refresh(center) {
+      if (destroyed) return;
+      if (center) {
+        if (debounceId !== null) dependencies.cancel(debounceId);
+        debounceId = null;
+        requestedCenter = null;
+        void loadCurrentArea(center);
+        return;
+      }
+      scheduleLoad(center);
+    },
     setCollectedIds(nextCollectedIds) {
       if (destroyed) return;
       collectedIds = nextCollectedIds;
       renderGameState();
+    },
+    setHeatmapVisible(visible) {
+      layer.setHeatmapVisible(visible);
     },
     destroy() {
       if (destroyed) return;
@@ -150,6 +171,7 @@ export function createMapDataController(
       requestVersion += 1;
       if (debounceId !== null) dependencies.cancel(debounceId);
       debounceId = null;
+      requestedCenter = null;
       map.off('moveend', handleMoveEnd);
       repository.abort();
       layer.destroy();

@@ -54,6 +54,7 @@ function createHarness(loadAround: ReturnType<typeof vi.fn>) {
   } as unknown as PoiRepository;
   const layer = {
     setPoints: vi.fn(),
+    setHeatmapVisible: vi.fn(),
     clearSelection: vi.fn(),
     destroy: vi.fn(),
   };
@@ -109,7 +110,7 @@ describe('MapDataController', () => {
     );
 
     harness.map.center = { lng: 38, lat: 56 };
-    harness.map.emit('moveend');
+    controller.refresh();
     harness.map.emit('moveend');
     expect(harness.dependencies.schedule).toHaveBeenLastCalledWith(
       expect.any(Function),
@@ -134,9 +135,11 @@ describe('MapDataController', () => {
     expect(harness.options.onStatus).toHaveBeenLastCalledWith({ type: 'zoom', count: 2 });
 
     controller.clearSelection();
+    controller.setHeatmapVisible(true);
     controller.destroy();
     controller.destroy();
     expect(harness.layer.clearSelection).toHaveBeenCalledTimes(1);
+    expect(harness.layer.setHeatmapVisible).toHaveBeenCalledWith(true);
     expect(harness.layer.destroy).toHaveBeenCalledTimes(1);
     expect(harness.map.listeners.size).toBe(0);
   });
@@ -167,5 +170,26 @@ describe('MapDataController', () => {
       message: 'API недоступен',
     });
     expect(harness.options.onError).toHaveBeenCalledWith('API недоступен');
+  });
+
+  it('сразу загружает явно заданный центр без ожидания debounce', async () => {
+    const loadAround = vi
+      .fn()
+      .mockResolvedValueOnce(result([point('moscow')]))
+      .mockResolvedValueOnce(result([point('petersburg')]));
+    const harness = createHarness(loadAround);
+    const controller = createMapDataController(
+      harness.map as unknown as MapLibreMap,
+      harness.repository,
+      harness.options,
+      harness.dependencies,
+    );
+    await flushPromises();
+
+    controller.refresh([30.3141, 59.9386]);
+    await flushPromises();
+
+    expect(loadAround).toHaveBeenLastCalledWith([30.3141, 59.9386]);
+    expect(harness.dependencies.schedule).not.toHaveBeenCalled();
   });
 });

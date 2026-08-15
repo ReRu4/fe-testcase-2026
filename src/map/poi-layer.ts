@@ -1,6 +1,7 @@
 import type {
   CircleLayerSpecification,
   GeoJSONSource,
+  HeatmapLayerSpecification,
   Map as MapLibreMap,
   MapLayerMouseEvent,
 } from 'maplibre-gl';
@@ -8,6 +9,7 @@ import { distanceMeters } from '../game/game';
 import type { Coordinates, Poi } from '../types';
 
 export const POI_SOURCE_ID = 'pokemap-pois';
+export const POI_HEATMAP_LAYER_ID = 'pokemap-poi-heatmap';
 export const POI_AVAILABLE_LAYER_ID = 'pokemap-poi-available';
 export const POI_LAYER_ID = 'pokemap-poi-points';
 export const POI_SELECTION_LAYER_ID = 'pokemap-poi-selection';
@@ -26,6 +28,7 @@ export interface PoiRenderState {
 
 export interface PoiLayer {
   setPoints(points: readonly Poi[], renderState: PoiRenderState): void;
+  setHeatmapVisible(visible: boolean): void;
   clearSelection(): void;
   destroy(): void;
 }
@@ -133,6 +136,44 @@ const AVAILABLE_LAYER: CircleLayerSpecification = {
   },
 };
 
+const HEATMAP_LAYER: HeatmapLayerSpecification = {
+  id: POI_HEATMAP_LAYER_ID,
+  type: 'heatmap',
+  source: POI_SOURCE_ID,
+  layout: { visibility: 'none' },
+  paint: {
+    'heatmap-weight': [
+      'match',
+      ['get', 'rarity'],
+      'legendary',
+      1,
+      'epic',
+      0.8,
+      'rare',
+      0.55,
+      0.3,
+    ],
+    'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 11, 0.65, 15, 1.35],
+    'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 11, 18, 15, 32],
+    'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.72, 16, 0.28],
+    'heatmap-color': [
+      'interpolate',
+      ['linear'],
+      ['heatmap-density'],
+      0,
+      'rgba(59, 130, 246, 0)',
+      0.25,
+      'rgba(59, 130, 246, 0.7)',
+      0.5,
+      'rgba(139, 92, 246, 0.78)',
+      0.75,
+      'rgba(245, 158, 11, 0.86)',
+      1,
+      'rgba(220, 38, 38, 0.92)',
+    ],
+  },
+};
+
 const SELECTION_LAYER: CircleLayerSpecification = {
   id: POI_SELECTION_LAYER_ID,
   type: 'circle',
@@ -155,6 +196,7 @@ export function createPoiLayer(
     type: 'geojson',
     data: toFeatureCollection([], null),
   });
+  map.addLayer(HEATMAP_LAYER);
   map.addLayer(AVAILABLE_LAYER);
   map.addLayer(POINT_LAYER);
   map.addLayer(SELECTION_LAYER);
@@ -212,6 +254,10 @@ export function createPoiLayer(
       pendingRenderState = renderState;
       if (frameId === null) frameId = scheduler.request(flushPoints);
     },
+    setHeatmapVisible(visible) {
+      if (destroyed) return;
+      map.setLayoutProperty(POI_HEATMAP_LAYER_ID, 'visibility', visible ? 'visible' : 'none');
+    },
     clearSelection() {
       if (destroyed || selectedId === null) return;
       selectedId = null;
@@ -230,6 +276,7 @@ export function createPoiLayer(
       if (map.getLayer(POI_SELECTION_LAYER_ID)) map.removeLayer(POI_SELECTION_LAYER_ID);
       if (map.getLayer(POI_LAYER_ID)) map.removeLayer(POI_LAYER_ID);
       if (map.getLayer(POI_AVAILABLE_LAYER_ID)) map.removeLayer(POI_AVAILABLE_LAYER_ID);
+      if (map.getLayer(POI_HEATMAP_LAYER_ID)) map.removeLayer(POI_HEATMAP_LAYER_ID);
       if (map.getSource(POI_SOURCE_ID)) map.removeSource(POI_SOURCE_ID);
       pointsById.clear();
     },

@@ -15,6 +15,7 @@ class FakeMap {
   public readonly resize = vi.fn(() => this);
   public readonly setPixelRatio = vi.fn();
   public readonly getPixelRatio = vi.fn(() => 1);
+  public readonly jumpTo = vi.fn(() => this);
 
   public on(type: string, listener: (event: never) => void): this {
     const listeners = this.listeners.get(type) ?? new Set();
@@ -79,6 +80,12 @@ describe('MapLibre adapter', () => {
     fakeMap.emit('style.load');
     fakeMap.emit('style.load');
     expect(onReady).toHaveBeenCalledTimes(1);
+
+    adapter.moveTo([30.3141, 59.9386]);
+    expect(fakeMap.jumpTo).toHaveBeenCalledWith({
+      center: [30.3141, 59.9386],
+      zoom: 14,
+    });
 
     fakeMap.emit('error', { error: new Error('ошибка тайла') });
     expect(onError).toHaveBeenCalledTimes(1);

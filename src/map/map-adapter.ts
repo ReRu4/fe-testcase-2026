@@ -20,6 +20,7 @@ export interface MapAdapterOptions {
 
 export interface MapAdapter {
   readonly map: MapLibreMap;
+  moveTo(center: Coordinates): void;
   destroy(): void;
 }
 
@@ -84,6 +85,13 @@ export function createMapAdapter(
 
   return {
     map,
+    moveTo(center) {
+      if (destroyed) return;
+      map.jumpTo({
+        center: [...center] as [number, number],
+        zoom: INITIAL_ZOOM,
+      });
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;

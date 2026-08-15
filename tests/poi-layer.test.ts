@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createPoiLayer,
   POI_AVAILABLE_LAYER_ID,
+  POI_HEATMAP_LAYER_ID,
   POI_LAYER_ID,
   POI_SELECTION_LAYER_ID,
   POI_SOURCE_ID,
@@ -39,6 +40,7 @@ class FakeMap {
     this.layers.has(id) ? { id } : undefined,
   );
   public readonly setFilter = vi.fn();
+  public readonly setLayoutProperty = vi.fn();
   public readonly removeLayer = vi.fn((id: string) => this.layers.delete(id));
   public readonly removeSource = vi.fn();
   public readonly getCanvas = vi.fn(() => this.canvas);
@@ -116,6 +118,13 @@ describe('PoiLayer', () => {
     expect(onSelect).toHaveBeenLastCalledWith(null);
     map.emit('mouseleave', POI_LAYER_ID);
     expect(map.canvas.style.cursor).toBe('');
+
+    layer.setHeatmapVisible(true);
+    layer.setHeatmapVisible(false);
+    expect(map.setLayoutProperty.mock.calls).toEqual([
+      [POI_HEATMAP_LAYER_ID, 'visibility', 'visible'],
+      [POI_HEATMAP_LAYER_ID, 'visibility', 'none'],
+    ]);
   });
 
   it('удаляет обработчики, слои, source и отложенный кадр', () => {
@@ -140,6 +149,7 @@ describe('PoiLayer', () => {
       POI_SELECTION_LAYER_ID,
       POI_LAYER_ID,
       POI_AVAILABLE_LAYER_ID,
+      POI_HEATMAP_LAYER_ID,
     ]);
     expect(map.removeSource).toHaveBeenCalledWith(POI_SOURCE_ID);
   });
